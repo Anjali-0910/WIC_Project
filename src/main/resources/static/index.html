@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cloud Performance Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0D1117; --surface:#151B26; --surface-2:#1B2330; --line:#2A3242;
+    --text:#E7ECF3; --muted:#8B96A8;
+    --teal:#4FD1C5; --amber:#F0B429; --red:#F0576B; --green:#3ED598;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Manrope',sans-serif;}
+  .wrap{max-width:1080px;margin:0 auto;padding:40px 24px 80px;}
+  header{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:36px;flex-wrap:wrap;}
+  h1{font-size:28px;font-weight:800;margin:0 0 6px;letter-spacing:-0.02em;}
+  .sub{color:var(--muted);font-size:14px;margin:0;}
+  .health{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);padding:8px 14px;border-radius:100px;font-family:'IBM Plex Mono',monospace;font-size:13px;}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0;}
+  .dot.up{background:var(--green);}
+  .dot.down{background:var(--red);}
+
+  .grid{display:grid;grid-template-columns:320px 1fr;gap:20px;}
+  @media (max-width:760px){.grid{grid-template-columns:1fr;}}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:22px;}
+  .card + .card{margin-top:20px;}
+  .card h2{font-size:13px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin:0 0 16px;font-weight:600;}
+
+  .drop{border:1.5px dashed var(--line);border-radius:10px;padding:26px 16px;text-align:center;cursor:pointer;transition:border-color .15s, background .15s;}
+  .drop:hover, .drop.over{border-color:var(--teal);background:rgba(79,209,197,0.06);}
+  .drop p{margin:0;font-size:13px;color:var(--muted);}
+  .drop .file{margin-top:8px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--text);word-break:break-all;}
+  input[type=file]{display:none;}
+
+  button{width:100%;margin-top:14px;background:var(--teal);color:#062E2A;border:none;border-radius:8px;padding:11px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;transition:opacity .15s;}
+  button:disabled{opacity:0.4;cursor:not-allowed;}
+  button:not(:disabled):hover{opacity:0.88;}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--text);}
+
+  .status-line{margin-top:12px;font-size:12.5px;font-family:'IBM Plex Mono',monospace;color:var(--muted);min-height:16px;}
+  .status-line.ok{color:var(--green);}
+  .status-line.err{color:var(--red);}
+
+  .score-row{display:flex;align-items:center;gap:22px;flex-wrap:wrap;}
+  .score-num{font-family:'IBM Plex Mono',monospace;font-size:52px;font-weight:700;line-height:1;}
+  .rating{display:inline-block;margin-top:8px;padding:4px 12px;border-radius:100px;font-size:12px;font-weight:700;font-family:'IBM Plex Mono',monospace;}
+  .rating.excellent{background:rgba(62,213,152,.15);color:var(--green);}
+  .rating.good{background:rgba(79,209,197,.15);color:var(--teal);}
+  .rating.needs{background:rgba(240,180,41,.15);color:var(--amber);}
+  .rating.poor{background:rgba(240,87,107,.15);color:var(--red);}
+
+  .bars{margin-top:22px;display:flex;flex-direction:column;gap:14px;}
+  .bar-row .label{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;}
+  .bar-row .label span:last-child{font-family:'IBM Plex Mono',monospace;color:var(--muted);}
+  .bar-track{height:8px;border-radius:5px;background:var(--surface-2);overflow:hidden;}
+  .bar-fill{height:100%;border-radius:5px;background:var(--teal);width:0%;transition:width .5s ease;}
+
+  .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:4px;}
+  @media (max-width:600px){.metrics{grid-template-columns:repeat(2,1fr);}}
+  .metric{background:var(--surface-2);border-radius:10px;padding:14px;}
+  .metric .v{font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:600;}
+  .metric .l{font-size:11.5px;color:var(--muted);margin-top:4px;}
+
+  .empty{color:var(--muted);font-size:13px;padding:8px 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Cloud Performance Platform</h1>
+      <p class="sub">k6 load test results, extracted metrics, and scoring</p>
+    </div>
+    <div class="health" id="health"><span class="dot" id="healthDot"></span><span id="healthText">checking…</span></div>
+  </header>
+
+  <div class="grid">
+    <div>
+      <div class="card">
+        <h2>Upload report</h2>
+        <div class="drop" id="drop">
+          <p>Drop <strong style="color:var(--text)">k6-summary.json</strong> or click to browse</p>
+          <div class="file" id="fileName"></div>
+        </div>
+        <input type="file" id="fileInput" accept="application/json">
+        <button id="uploadBtn" disabled>Upload report</button>
+        <div class="status-line" id="uploadStatus"></div>
+      </div>
+      <div class="card">
+        <h2>Actions</h2>
+        <button class="ghost" id="refreshBtn">Refresh report &amp; score</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2>Performance score</h2>
+        <div id="scoreBody"><p class="empty">No score yet — upload a report to calculate one.</p></div>
+      </div>
+      <div class="card">
+        <h2>Extracted metrics</h2>
+        <div id="reportBody"><p class="empty">No report loaded yet.</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = ""; // same-origin: served from Spring Boot's static folder
+const $ = id => document.getElementById(id);
+
+async function checkHealth(){
+  const dot=$('healthDot'), txt=$('healthText');
+  try{
+    const res = await fetch(API+'/api/health');
+    if(res.ok){dot.className='dot up';txt.textContent='API online';}
+    else throw new Error();
+  }catch(e){dot.className='dot down';txt.textContent='API unreachable';}
+}
+
+function ratingClass(r){
+  r=(r||'').toLowerCase();
+  if(r.includes('excel'))return'excellent';
+  if(r.includes('good'))return'good';
+  if(r.includes('improve'))return'needs';
+  return'poor';
+}
+
+function barRow(label, val){
+  const v = typeof val === 'number' ? val : 0;
+  return '<div class="bar-row">' +
+    '<div class="label"><span>'+label+'</span><span>'+v+'</span></div>' +
+    '<div class="bar-track"><div class="bar-fill" data-w="'+v+'"></div></div>' +
+  '</div>';
+}
+
+function renderScore(s){
+  const rc = ratingClass(s.rating);
+  const scoreNum = (s.score && s.score.toFixed) ? s.score.toFixed(1) : s.score;
+  $('scoreBody').innerHTML =
+    '<div class="score-row">' +
+      '<div>' +
+        '<div class="score-num">' + scoreNum + '</div>' +
+        '<div class="rating ' + rc + '">' + (s.rating || '—') + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="bars">' +
+      barRow('Response time', s.responseTimeScore) +
+      barRow('Reliability', s.reliabilityScore) +
+      barRow('Throughput', s.throughputScore) +
+    '</div>';
+  requestAnimationFrame(()=>{
+    document.querySelectorAll('.bar-fill').forEach(el=>{el.style.width = el.dataset.w+'%';});
+  });
+}
+
+function metricBox(label, val){
+  return '<div class="metric"><div class="v">'+val+'</div><div class="l">'+label+'</div></div>';
+}
+
+function renderReport(r){
+  const items = [
+    ['Total requests', r.totalRequests],
+    ['Error rate', (r.errorRate ?? 0)+'%'],
+    ['Avg response', (r.averageResponseTime ?? '—')+' ms'],
+    ['P95 response', (r.p95ResponseTime ?? '—')+' ms'],
+    ['Max response', (r.maxResponseTime ?? '—')+' ms'],
+    ['Req / sec', r.requestsPerSecond],
+  ];
+  $('reportBody').innerHTML = '<div class="metrics">' +
+    items.map(function(pair){ return metricBox(pair[0], pair[1]); }).join('') +
+  '</div>';
+}
+
+async function loadReport(){
+  try{
+    const res = await fetch(API+'/api/performance/report');
+    if(!res.ok) throw new Error();
+    renderReport(await res.json());
+  }catch(e){ $('reportBody').innerHTML = '<p class="empty">No report loaded yet.</p>'; }
+}
+async function loadScore(){
+  try{
+    const res = await fetch(API+'/api/performance/score');
+    if(!res.ok) throw new Error();
+    renderScore(await res.json());
+  }catch(e){ $('scoreBody').innerHTML = '<p class="empty">No score yet — upload a report to calculate one.</p>'; }
+}
+
+let chosenFile = null;
+const drop=$('drop'), input=$('fileInput'), uploadBtn=$('uploadBtn');
+drop.addEventListener('click', ()=>input.click());
+['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev, e=>{e.preventDefault();drop.classList.add('over');}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev, e=>{e.preventDefault();drop.classList.remove('over');}));
+drop.addEventListener('drop', e=>{ if(e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); });
+input.addEventListener('change', e=>{ if(e.target.files[0]) setFile(e.target.files[0]); });
+function setFile(f){ chosenFile=f; $('fileName').textContent=f.name; uploadBtn.disabled=false; }
+
+uploadBtn.addEventListener('click', async ()=>{
+  if(!chosenFile) return;
+  const status = $('uploadStatus');
+  uploadBtn.disabled = true;
+  status.className='status-line'; status.textContent='Uploading…';
+  const fd = new FormData();
+  fd.append('file', chosenFile);
+  try{
+    const res = await fetch(API+'/api/performance/upload', {method:'POST', body:fd});
+    if(!res.ok) throw new Error('Upload failed ('+res.status+')');
+    status.className='status-line ok'; status.textContent='Uploaded. Refreshing report & score…';
+    await Promise.all([loadReport(), loadScore()]);
+  }catch(e){
+    status.className='status-line err'; status.textContent = e.message || 'Upload failed.';
+  }finally{
+    uploadBtn.disabled=false;
+  }
+});
+
+$('refreshBtn').addEventListener('click', ()=>{ loadReport(); loadScore(); });
+
+checkHealth();
+loadReport();
+loadScore();
+</script>
+</body>
+</html>

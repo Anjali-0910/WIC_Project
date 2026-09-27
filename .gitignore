@@ -1,0 +1,4 @@
+target/
+*.class
+k6-summary.json
+.vscode/
