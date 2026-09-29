@@ -83,10 +83,10 @@
       <div class="card">
         <h2>Upload report</h2>
         <div class="drop" id="drop">
-          <p>Drop <strong style="color:var(--text)">k6-summary.json</strong> or click to browse</p>
+          <p>Drop <strong style="color:var(--text)">any file</strong> or click to browse</p>
           <div class="file" id="fileName"></div>
         </div>
-        <input type="file" id="fileInput" accept="application/json">
+        <input type="file" id="fileInput">
         <button id="uploadBtn" disabled>Upload report</button>
         <div class="status-line" id="uploadStatus"></div>
       </div>
@@ -110,13 +110,13 @@
 </div>
 
 <script>
-const API = ""; // same-origin: served from Spring Boot's static folder
+const API = ""; 
 const $ = id => document.getElementById(id);
 
 async function checkHealth(){
   const dot=$('healthDot'), txt=$('healthText');
   try{
-    const res = await fetch(API+'/api/health');
+    const res = await fetch(API+'/api/health?t=' + Date.now());
     if(res.ok){dot.className='dot up';txt.textContent='API online';}
     else throw new Error();
   }catch(e){dot.className='dot down';txt.textContent='API unreachable';}
@@ -140,7 +140,7 @@ function barRow(label, val){
 
 function renderScore(s){
   const rc = ratingClass(s.rating);
-  const scoreNum = (s.score && s.score.toFixed) ? s.score.toFixed(1) : s.score;
+  const scoreNum = (s.score !== undefined && s.score !== null && s.score.toFixed) ? s.score.toFixed(1) : (s.score ?? 0);
   $('scoreBody').innerHTML =
     '<div class="score-row">' +
       '<div>' +
@@ -164,12 +164,12 @@ function metricBox(label, val){
 
 function renderReport(r){
   const items = [
-    ['Total requests', r.totalRequests],
-    ['Error rate', (r.errorRate ?? 0)+'%'],
-    ['Avg response', (r.averageResponseTime ?? '—')+' ms'],
-    ['P95 response', (r.p95ResponseTime ?? '—')+' ms'],
-    ['Max response', (r.maxResponseTime ?? '—')+' ms'],
-    ['Req / sec', r.requestsPerSecond],
+    ['Total requests', r.totalRequests ?? '—'],
+    ['Error rate', (r.errorRate !== undefined ? r.errorRate : 0) + '%'],
+    ['Avg response', (r.averageResponseTime !== undefined ? r.averageResponseTime : '—') + ' ms'],
+    ['P95 response', (r.p95ResponseTime !== undefined ? r.p95ResponseTime : '—') + ' ms'],
+    ['Max response', (r.maxResponseTime !== undefined ? r.maxResponseTime : '—') + ' ms'],
+    ['Req / sec', r.requestsPerSecond ?? '—'],
   ];
   $('reportBody').innerHTML = '<div class="metrics">' +
     items.map(function(pair){ return metricBox(pair[0], pair[1]); }).join('') +
@@ -178,48 +178,88 @@ function renderReport(r){
 
 async function loadReport(){
   try{
-    const res = await fetch(API+'/api/performance/report');
+    const res = await fetch(API+'/api/performance/report?t=' + Date.now());
     if(!res.ok) throw new Error();
-    renderReport(await res.json());
-  }catch(e){ $('reportBody').innerHTML = '<p class="empty">No report loaded yet.</p>'; }
+    const data = await res.json();
+    renderReport(data);
+  }catch(e){ 
+    $('reportBody').innerHTML = '<p class="empty">No report loaded yet.</p>'; 
+  }
 }
+
 async function loadScore(){
   try{
-    const res = await fetch(API+'/api/performance/score');
+    const res = await fetch(API+'/api/performance/score?t=' + Date.now());
     if(!res.ok) throw new Error();
-    renderScore(await res.json());
-  }catch(e){ $('scoreBody').innerHTML = '<p class="empty">No score yet — upload a report to calculate one.</p>'; }
+    const data = await res.json();
+    renderScore(data);
+  }catch(e){ 
+    $('scoreBody').innerHTML = '<p class="empty">No score yet — upload a report to calculate one.</p>'; 
+  }
 }
 
 let chosenFile = null;
 const drop=$('drop'), input=$('fileInput'), uploadBtn=$('uploadBtn');
+
 drop.addEventListener('click', ()=>input.click());
 ['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev, e=>{e.preventDefault();drop.classList.add('over');}));
 ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev, e=>{e.preventDefault();drop.classList.remove('over');}));
-drop.addEventListener('drop', e=>{ if(e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); });
-input.addEventListener('change', e=>{ if(e.target.files[0]) setFile(e.target.files[0]); });
-function setFile(f){ chosenFile=f; $('fileName').textContent=f.name; uploadBtn.disabled=false; }
+
+drop.addEventListener('drop', e=>{ 
+  if(e.dataTransfer.files && e.dataTransfer.files[0]){ 
+    setFile(e.dataTransfer.files[0]); 
+  } 
+});
+
+input.addEventListener('change', e=>{ 
+  if(e.target.files && e.target.files[0]){ 
+    setFile(e.target.files[0]); 
+  } 
+});
+
+function setFile(f){ 
+  chosenFile = f; 
+  $('fileName').textContent = f.name; 
+  uploadBtn.disabled = false; 
+}
 
 uploadBtn.addEventListener('click', async ()=>{
   if(!chosenFile) return;
   const status = $('uploadStatus');
   uploadBtn.disabled = true;
-  status.className='status-line'; status.textContent='Uploading…';
+  status.className = 'status-line'; 
+  status.textContent = 'Uploading…';
+  
   const fd = new FormData();
   fd.append('file', chosenFile);
+  
   try{
     const res = await fetch(API+'/api/performance/upload', {method:'POST', body:fd});
     if(!res.ok) throw new Error('Upload failed ('+res.status+')');
-    status.className='status-line ok'; status.textContent='Uploaded. Refreshing report & score…';
+    
+    status.className = 'status-line ok'; 
+    status.textContent = 'Uploaded successfully! Updating metrics…';
+    
+    await new Promise(r => setTimeout(r, 200));
     await Promise.all([loadReport(), loadScore()]);
+    
+    status.textContent = 'Report & score updated!';
   }catch(e){
-    status.className='status-line err'; status.textContent = e.message || 'Upload failed.';
+    status.className = 'status-line err'; 
+    status.textContent = e.message || 'Upload failed.';
   }finally{
-    uploadBtn.disabled=false;
+    uploadBtn.disabled = false;
   }
 });
 
-$('refreshBtn').addEventListener('click', ()=>{ loadReport(); loadScore(); });
+$('refreshBtn').addEventListener('click', async ()=>{
+  const status = $('uploadStatus');
+  status.className = 'status-line';
+  status.textContent = 'Refreshing...';
+  await Promise.all([loadReport(), loadScore()]);
+  status.className = 'status-line ok';
+  status.textContent = 'Refreshed successfully.';
+});
 
 checkHealth();
 loadReport();
