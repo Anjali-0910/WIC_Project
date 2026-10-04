@@ -6,6 +6,7 @@
 <title>Cloud Performance Platform</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   :root{
     --bg:#0D1117; --surface:#151B26; --surface-2:#1B2330; --line:#2A3242;
@@ -40,14 +41,15 @@
   button:disabled{opacity:0.4;cursor:not-allowed;}
   button:not(:disabled):hover{opacity:0.88;}
   button.ghost{background:transparent;border:1px solid var(--line);color:var(--text);}
+  .actions button:first-of-type{margin-top:0;}
 
-  .status-line{margin-top:12px;font-size:12.5px;font-family:'IBM Plex Mono',monospace;color:var(--muted);min-height:16px;}
+  .status-line{margin-top:12px;font-size:12.5px;font-family:'IBM Plex Mono',monospace;color:var(--muted);min-height:16px;word-break:break-word;}
   .status-line.ok{color:var(--green);}
   .status-line.err{color:var(--red);}
 
-  .score-row{display:flex;align-items:center;gap:22px;flex-wrap:wrap;}
   .score-num{font-family:'IBM Plex Mono',monospace;font-size:52px;font-weight:700;line-height:1;}
-  .rating{display:inline-block;margin-top:8px;padding:4px 12px;border-radius:100px;font-size:12px;font-weight:700;font-family:'IBM Plex Mono',monospace;}
+  .rating{display:inline-block;margin-top:8px;padding:4px 12px;border-radius:100px;font-size:12px;font-weight:700;font-family:'IBM Plex Mono',monospace;white-space:nowrap;}
+  .rating.sm{margin-top:0;padding:2px 9px;font-size:11px;}
   .rating.excellent{background:rgba(62,213,152,.15);color:var(--green);}
   .rating.good{background:rgba(79,209,197,.15);color:var(--teal);}
   .rating.needs{background:rgba(240,180,41,.15);color:var(--amber);}
@@ -59,11 +61,33 @@
   .bar-track{height:8px;border-radius:5px;background:var(--surface-2);overflow:hidden;}
   .bar-fill{height:100%;border-radius:5px;background:var(--teal);width:0%;transition:width .5s ease;}
 
+  .fileinfo{background:var(--surface-2);border-radius:10px;padding:14px;margin-bottom:14px;}
+  .fileinfo .fn{font-weight:700;font-size:15px;word-break:break-all;}
+  .fileinfo .fmeta{font-size:12.5px;color:var(--muted);margin-top:4px;}
+  .fileinfo .hash{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);margin-top:8px;word-break:break-all;}
+  .fileinfo .note{font-size:11.5px;color:var(--muted);margin-top:8px;}
+  .tag{display:inline-block;padding:1px 8px;border-radius:100px;background:rgba(79,209,197,.15);color:var(--teal);font-size:11px;font-weight:700;}
+
   .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:4px;}
   @media (max-width:600px){.metrics{grid-template-columns:repeat(2,1fr);}}
   .metric{background:var(--surface-2);border-radius:10px;padding:14px;}
-  .metric .v{font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:600;}
+  .metric .v{font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:600;word-break:break-word;}
   .metric .l{font-size:11.5px;color:var(--muted);margin-top:4px;}
+
+  .history{margin-top:20px;}
+  .table-wrap{overflow-x:auto;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{text-align:left;color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:0.05em;padding:0 12px 10px;white-space:nowrap;}
+  td{padding:11px 12px;border-top:1px solid var(--line);white-space:nowrap;}
+  td.fname{white-space:normal;word-break:break-all;max-width:280px;font-weight:600;}
+  tbody tr{cursor:pointer;transition:background .12s;}
+  tbody tr:hover{background:var(--surface-2);}
+  tbody tr.sel{background:rgba(79,209,197,0.08);}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  .score-cell{display:flex;align-items:center;gap:10px;}
+  .score-cell b{font-family:'IBM Plex Mono',monospace;font-size:14px;min-width:38px;}
+  button.del{width:auto;margin:0;padding:3px 9px;background:transparent;border:1px solid var(--line);color:var(--muted);font-size:12px;font-weight:600;}
+  button.del:hover{border-color:var(--red);color:var(--red);}
 
   .empty{color:var(--muted);font-size:13px;padding:8px 0;}
 </style>
@@ -73,9 +97,9 @@
   <header>
     <div>
       <h1>Cloud Performance Platform</h1>
-      <p class="sub">k6 load test results, extracted metrics, and scoring</p>
+      <p class="sub">Upload any file or k6 report: extracted metrics, scoring, and history</p>
     </div>
-    <div class="health" id="health"><span class="dot" id="healthDot"></span><span id="healthText">checking…</span></div>
+    <div class="health"><span class="dot" id="healthDot"></span><span id="healthText">checking...</span></div>
   </header>
 
   <div class="grid">
@@ -90,16 +114,17 @@
         <button id="uploadBtn" disabled>Upload report</button>
         <div class="status-line" id="uploadStatus"></div>
       </div>
-      <div class="card">
+      <div class="card actions">
         <h2>Actions</h2>
         <button class="ghost" id="refreshBtn">Refresh report &amp; score</button>
+        <button class="ghost" id="pdfBtn" disabled>Download clean PDF report</button>
       </div>
     </div>
 
     <div>
       <div class="card">
         <h2>Performance score</h2>
-        <div id="scoreBody"><p class="empty">No score yet — upload a report to calculate one.</p></div>
+        <div id="scoreBody"><p class="empty">No score yet. Upload a file to calculate one.</p></div>
       </div>
       <div class="card">
         <h2>Extracted metrics</h2>
@@ -107,11 +132,57 @@
       </div>
     </div>
   </div>
+
+  <div class="card history">
+    <h2>Upload history</h2>
+    <div id="historyBody"><p class="empty">No files uploaded yet.</p></div>
+  </div>
 </div>
 
 <script>
-const API = ""; 
+const API = "";
 const $ = id => document.getElementById(id);
+
+let current = null;
+let selectedId = null;
+let historyList = [];
+
+function esc(s){
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function fmtMs(v){
+  if (v === undefined || v === null) return '-';
+  if (v > 0 && v < 0.01) return '<0.01 ms';
+  return Number(v).toFixed(2) + ' ms';
+}
+function fmtPct(fraction){
+  return parseFloat((Number(fraction || 0) * 100).toFixed(2)) + '%';
+}
+function fmtDuration(s){
+  s = Number(s || 0);
+  if (s < 10) return s.toFixed(2) + 's';
+  if (s < 60) return s.toFixed(1) + 's';
+  const m = Math.floor(s / 60), r = Math.round(s % 60);
+  return m + 'm ' + String(r).padStart(2, '0') + 's';
+}
+function fmtSize(b){
+  b = Number(b || 0);
+  if (b < 1024) return b + ' B';
+  if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
+  if (b < 1024*1024*1024) return (b/1024/1024).toFixed(1) + ' MB';
+  return (b/1024/1024/1024).toFixed(2) + ' GB';
+}
+function fmtDate(iso){ return iso ? new Date(iso).toLocaleString() : '-'; }
+function modeLabel(r){
+  return r.testType === 'K6_REPORT' ? 'k6 load test report' : 'File benchmark (' + r.totalRequests + ' read passes)';
+}
+function ratingClass(r){
+  r=(r||'').toLowerCase();
+  if(r.includes('excel'))return'excellent';
+  if(r.includes('good'))return'good';
+  if(r.includes('improve'))return'needs';
+  return'poor';
+}
 
 async function checkHealth(){
   const dot=$('healthDot'), txt=$('healthText');
@@ -120,14 +191,6 @@ async function checkHealth(){
     if(res.ok){dot.className='dot up';txt.textContent='API online';}
     else throw new Error();
   }catch(e){dot.className='dot down';txt.textContent='API unreachable';}
-}
-
-function ratingClass(r){
-  r=(r||'').toLowerCase();
-  if(r.includes('excel'))return'excellent';
-  if(r.includes('good'))return'good';
-  if(r.includes('improve'))return'needs';
-  return'poor';
 }
 
 function barRow(label, val){
@@ -140,14 +203,10 @@ function barRow(label, val){
 
 function renderScore(s){
   const rc = ratingClass(s.rating);
-  const scoreNum = (s.score !== undefined && s.score !== null && s.score.toFixed) ? s.score.toFixed(1) : (s.score ?? 0);
+  const scoreNum = Number(s.score ?? 0).toFixed(1);
   $('scoreBody').innerHTML =
-    '<div class="score-row">' +
-      '<div>' +
-        '<div class="score-num">' + scoreNum + '</div>' +
-        '<div class="rating ' + rc + '">' + (s.rating || '—') + '</div>' +
-      '</div>' +
-    '</div>' +
+    '<div><div class="score-num">' + scoreNum + '</div>' +
+    '<div class="rating ' + rc + '">' + esc(s.rating || '-') + '</div></div>' +
     '<div class="bars">' +
       barRow('Response time', s.responseTimeScore) +
       barRow('Reliability', s.reliabilityScore) +
@@ -163,40 +222,99 @@ function metricBox(label, val){
 }
 
 function renderReport(r){
+  const note = r.testType === 'K6_REPORT' ? '' :
+    '<div class="note">Not a k6 report, so the file itself was benchmarked: each "request" is one full read pass of the file. Virtual users is 1.</div>';
+  const info =
+    '<div class="fileinfo">' +
+      '<div class="fn">' + esc(r.fileName) + '</div>' +
+      '<div class="fmeta">' + esc(r.fileType) + ' | ' + fmtSize(r.fileSize) + ' | <span class="tag">' + esc(modeLabel(r)) + '</span></div>' +
+      '<div class="hash">SHA-256: ' + esc(r.sha256) + '</div>' + note +
+    '</div>';
+
   const items = [
-    ['Total requests', r.totalRequests ?? '—'],
-    ['Error rate', (r.errorRate !== undefined ? r.errorRate : 0) + '%'],
-    ['Avg response', (r.averageResponseTime !== undefined ? r.averageResponseTime : '—') + ' ms'],
-    ['P95 response', (r.p95ResponseTime !== undefined ? r.p95ResponseTime : '—') + ' ms'],
-    ['Max response', (r.maxResponseTime !== undefined ? r.maxResponseTime : '—') + ' ms'],
-    ['Req / sec', r.requestsPerSecond ?? '—'],
+    ['Total requests', r.totalRequests ?? '-'],
+    ['Error rate', fmtPct(r.errorRate)],
+    ['Avg response', fmtMs(r.averageResponseTime)],
+    ['Min response', fmtMs(r.minResponseTime)],
+    ['P95 response', fmtMs(r.p95ResponseTime)],
+    ['Max response', fmtMs(r.maxResponseTime)],
+    ['Req / sec', Number(r.requestsPerSecond ?? 0).toFixed(2)],
+    ['Test duration', fmtDuration(r.durationSeconds)],
+    ['Virtual users', (r.virtualUsers ?? 1) + ' VUs'],
   ];
-  $('reportBody').innerHTML = '<div class="metrics">' +
-    items.map(function(pair){ return metricBox(pair[0], pair[1]); }).join('') +
-  '</div>';
+  $('reportBody').innerHTML = info + '<div class="metrics">' +
+    items.map(p => metricBox(p[0], p[1])).join('') + '</div>';
 }
 
-async function loadReport(){
-  try{
-    const res = await fetch(API+'/api/performance/report?t=' + Date.now());
-    if(!res.ok) throw new Error();
-    const data = await res.json();
-    renderReport(data);
-  }catch(e){ 
-    $('reportBody').innerHTML = '<p class="empty">No report loaded yet.</p>'; 
-  }
+function clearDashboard(){
+  current = null;
+  $('scoreBody').innerHTML = '<p class="empty">No score yet. Upload a file to calculate one.</p>';
+  $('reportBody').innerHTML = '<p class="empty">No report loaded yet.</p>';
+  $('pdfBtn').disabled = true;
 }
 
-async function loadScore(){
-  try{
-    const res = await fetch(API+'/api/performance/score?t=' + Date.now());
-    if(!res.ok) throw new Error();
-    const data = await res.json();
-    renderScore(data);
-  }catch(e){ 
-    $('scoreBody').innerHTML = '<p class="empty">No score yet — upload a report to calculate one.</p>'; 
-  }
+function showRecord(rec){
+  current = rec;
+  selectedId = rec.id;
+  renderScore(rec);
+  renderReport(rec);
+  $('pdfBtn').disabled = false;
+  document.querySelectorAll('#historyBody tr[data-id]').forEach(tr=>{
+    tr.classList.toggle('sel', Number(tr.dataset.id) === rec.id);
+  });
 }
+
+function renderHistory(){
+  if (!historyList.length){
+    $('historyBody').innerHTML = '<p class="empty">No files uploaded yet.</p>';
+    return;
+  }
+  const rows = historyList.map(r =>
+    '<tr data-id="'+r.id+'" class="'+(r.id===selectedId?'sel':'')+'">' +
+      '<td class="fname">'+esc(r.fileName)+'</td>' +
+      '<td class="mono">'+esc(r.fileType)+'</td>' +
+      '<td>'+fmtSize(r.fileSize)+'</td>' +
+      '<td><div class="score-cell"><b>'+Number(r.score).toFixed(1)+'</b>' +
+          '<span class="rating sm '+ratingClass(r.rating)+'">'+esc(r.rating)+'</span></div></td>' +
+      '<td>'+fmtDate(r.uploadedAt)+'</td>' +
+      '<td><button class="del" data-del="'+r.id+'" title="Remove from history">Delete</button></td>' +
+    '</tr>').join('');
+  $('historyBody').innerHTML =
+    '<div class="table-wrap"><table><thead><tr>' +
+      '<th>File</th><th>Type</th><th>Size</th><th>Performance</th><th>Uploaded</th><th></th>' +
+    '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+
+async function refreshAll(){
+  try{
+    const res = await fetch(API+'/api/performance/history?t=' + Date.now());
+    if(!res.ok) throw new Error();
+    historyList = await res.json();
+  }catch(e){ historyList = []; }
+
+  if (!historyList.length){ selectedId = null; renderHistory(); clearDashboard(); return; }
+  const sel = historyList.find(r => r.id === selectedId) || historyList[0];
+  renderHistory();
+  showRecord(sel);
+}
+
+$('historyBody').addEventListener('click', async e=>{
+  const del = e.target.closest('[data-del]');
+  if (del){
+    e.stopPropagation();
+    if (!confirm('Remove this file from history?')) return;
+    const id = Number(del.dataset.del);
+    await fetch(API+'/api/performance/history/'+id, {method:'DELETE'});
+    if (selectedId === id) selectedId = null;
+    await refreshAll();
+    return;
+  }
+  const tr = e.target.closest('tr[data-id]');
+  if (tr){
+    const rec = historyList.find(r => r.id === Number(tr.dataset.id));
+    if (rec) showRecord(rec);
+  }
+});
 
 let chosenFile = null;
 const drop=$('drop'), input=$('fileInput'), uploadBtn=$('uploadBtn');
@@ -204,48 +322,39 @@ const drop=$('drop'), input=$('fileInput'), uploadBtn=$('uploadBtn');
 drop.addEventListener('click', ()=>input.click());
 ['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev, e=>{e.preventDefault();drop.classList.add('over');}));
 ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev, e=>{e.preventDefault();drop.classList.remove('over');}));
+drop.addEventListener('drop', e=>{ if(e.dataTransfer.files && e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); });
+input.addEventListener('change', e=>{ if(e.target.files && e.target.files[0]) setFile(e.target.files[0]); });
 
-drop.addEventListener('drop', e=>{ 
-  if(e.dataTransfer.files && e.dataTransfer.files[0]){ 
-    setFile(e.dataTransfer.files[0]); 
-  } 
-});
-
-input.addEventListener('change', e=>{ 
-  if(e.target.files && e.target.files[0]){ 
-    setFile(e.target.files[0]); 
-  } 
-});
-
-function setFile(f){ 
-  chosenFile = f; 
-  $('fileName').textContent = f.name; 
-  uploadBtn.disabled = false; 
+function setFile(f){
+  chosenFile = f;
+  $('fileName').textContent = f.name + ' (' + fmtSize(f.size) + ')';
+  uploadBtn.disabled = false;
 }
 
 uploadBtn.addEventListener('click', async ()=>{
   if(!chosenFile) return;
   const status = $('uploadStatus');
   uploadBtn.disabled = true;
-  status.className = 'status-line'; 
-  status.textContent = 'Uploading…';
-  
+  status.className = 'status-line';
+  status.textContent = 'Uploading and analysing...';
+
   const fd = new FormData();
   fd.append('file', chosenFile);
-  
+
   try{
     const res = await fetch(API+'/api/performance/upload', {method:'POST', body:fd});
-    if(!res.ok) throw new Error('Upload failed ('+res.status+')');
-    
-    status.className = 'status-line ok'; 
-    status.textContent = 'Uploaded successfully! Updating metrics…';
-    
-    await new Promise(r => setTimeout(r, 200));
-    await Promise.all([loadReport(), loadScore()]);
-    
-    status.textContent = 'Report & score updated!';
+    if(!res.ok){
+      let msg = 'Upload failed (' + res.status + ')';
+      try{ const j = await res.json(); if(j.error) msg = j.error; }catch(_){}
+      throw new Error(msg);
+    }
+    const rec = await res.json();
+    selectedId = rec.id;
+    await refreshAll();
+    status.className = 'status-line ok';
+    status.textContent = 'Done. Score: ' + Number(rec.score).toFixed(1) + ' (' + rec.rating + ')';
   }catch(e){
-    status.className = 'status-line err'; 
+    status.className = 'status-line err';
     status.textContent = e.message || 'Upload failed.';
   }finally{
     uploadBtn.disabled = false;
@@ -256,14 +365,71 @@ $('refreshBtn').addEventListener('click', async ()=>{
   const status = $('uploadStatus');
   status.className = 'status-line';
   status.textContent = 'Refreshing...';
-  await Promise.all([loadReport(), loadScore()]);
+  await refreshAll();
   status.className = 'status-line ok';
   status.textContent = 'Refreshed successfully.';
 });
 
+$('pdfBtn').addEventListener('click', ()=>{
+  if(!current) return;
+  if(!window.jspdf){ alert('PDF library could not load. Check your internet connection and refresh.'); return; }
+  const r = current;
+  const doc = new window.jspdf.jsPDF();
+  let y = 20;
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(0);
+  doc.text('Cloud Performance Report', 14, y); y += 8;
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(120);
+  doc.text('Generated: ' + new Date().toLocaleString(), 14, y); y += 12;
+
+  function section(title, rows){
+    if (y > 255){ doc.addPage(); y = 20; }
+    doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(0);
+    doc.text(title, 14, y); y += 3;
+    doc.setDrawColor(200); doc.line(14, y, 196, y); y += 7;
+    doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    rows.forEach(([k, v])=>{
+      const lines = doc.splitTextToSize(String(v), 115);
+      if (y + lines.length * 5 > 285){ doc.addPage(); y = 20; }
+      doc.setTextColor(110); doc.text(k, 14, y);
+      doc.setTextColor(0);   doc.text(lines, 75, y);
+      y += lines.length * 5 + 2;
+    });
+    y += 6;
+  }
+
+  section('File', [
+    ['File name', r.fileName],
+    ['Type', r.fileType],
+    ['Size', fmtSize(r.fileSize)],
+    ['SHA-256', r.sha256],
+    ['Analysis mode', modeLabel(r)],
+    ['Uploaded', fmtDate(r.uploadedAt)],
+  ]);
+  section('Performance score', [
+    ['Overall score', Number(r.score).toFixed(1) + ' / 100 (' + r.rating + ')'],
+    ['Response time score', r.responseTimeScore],
+    ['Reliability score', r.reliabilityScore],
+    ['Throughput score', r.throughputScore],
+  ]);
+  section('Metrics', [
+    ['Total requests', r.totalRequests],
+    ['Error rate', fmtPct(r.errorRate)],
+    ['Avg response', fmtMs(r.averageResponseTime)],
+    ['Min response', fmtMs(r.minResponseTime)],
+    ['P95 response', fmtMs(r.p95ResponseTime)],
+    ['Max response', fmtMs(r.maxResponseTime)],
+    ['Requests / sec', Number(r.requestsPerSecond).toFixed(2)],
+    ['Test duration', fmtDuration(r.durationSeconds)],
+    ['Virtual users', r.virtualUsers + ' VUs'],
+  ]);
+
+  const safe = r.fileName.replace(/[^a-z0-9._-]/gi, '_');
+  doc.save('performance-report-' + safe + '.pdf');
+});
+
 checkHealth();
-loadReport();
-loadScore();
+refreshAll();
 </script>
 </body>
 </html>
