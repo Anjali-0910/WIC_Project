@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cloud Performance Platform</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-main: #0B0F17;
+    --bg-card: #131B2E;
+    --border: #1E293B;
+    --accent: #2DD4BF;
+    --accent-glow: rgba(45, 212, 191, 0.15);
+    --text-main: #F8FAFC;
+    --text-muted: #94A3B8;
+    --success: #34D399;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background-color: var(--bg-main); color: var(--text-main); font-family: 'Plus Jakarta Sans', sans-serif; padding: 30px; }
+  .container { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 350px 1fr; gap: 24px; }
+  
+  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+  h2 { font-size: 12px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.08em; margin-bottom: 16px; }
+  
+  .dropzone { border: 2px dashed var(--border); border-radius: 12px; padding: 24px; text-align: center; cursor: pointer; transition: all 0.2s; background: rgba(19, 27, 46, 0.5); }
+  .dropzone:hover { border-color: var(--accent); background: var(--accent-glow); }
+  .dropzone p { font-size: 13px; color: var(--text-muted); }
+  #fileName { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--accent); margin-top: 8px; }
+  
+  .btn { width: 100%; background: var(--accent); color: #042F2E; border: none; border-radius: 10px; padding: 12px; font-weight: 700; cursor: pointer; transition: opacity 0.2s; margin-top: 14px; font-size: 14px; }
+  .btn:hover { opacity: 0.9; }
+  .btn:disabled { background: #334155; color: #64748B; cursor: not-allowed; }
+  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-main); font-weight: 600; }
+  .btn-outline:hover { background: var(--border); }
+
+  .score-header { display: flex; align-items: baseline; justify-content: space-between; }
+  .score-value { font-size: 48px; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: var(--text-main); }
+  .badge { background: rgba(52, 211, 153, 0.15); color: var(--success); padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 700; }
+  
+  .bar-label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; color: var(--text-muted); }
+  .bar-container { background: #1E293B; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 16px; }
+  .bar-fill { background: var(--accent); height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+
+  .metrics-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .metric-box { background: #0B0F17; border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .metric-val { font-size: 22px; font-weight: 700; font-family: 'JetBrains Mono', monospace; color: var(--text-main); }
+  .metric-lbl { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+  .history-item { display: flex; justify-content: space-between; align-items: center; background: #0B0F17; padding: 10px 14px; border-radius: 8px; margin-bottom: 8px; font-size: 13px; font-family: 'JetBrains Mono', monospace; border: 1px solid var(--border); }
+  .history-badge { font-size: 11px; color: var(--success); background: rgba(52,211,153,0.1); padding: 2px 8px; border-radius: 6px; }
+  .status-msg { margin-top: 10px; font-size: 12px; font-family: 'JetBrains Mono', monospace; color: var(--text-muted); white-space: pre-wrap; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Left Sidebar -->
+  <div>
+    <div class="card">
+      <h2>Upload Any File</h2>
+      <div class="dropzone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+        <p>Drop any file (.pdf, .json, .zip, etc.)<br>or click to browse</p>
+        <div id="fileName"></div>
+      </div>
+      <input type="file" id="fileInput" style="display:none">
+      <button class="btn" id="uploadBtn" disabled onclick="uploadFile()">Upload &amp; scan</button>
+      <div class="status-msg" id="statusMsg"></div>
+    </div>
+
+    <div class="card">
+      <h2>Actions</h2>
+      <button class="btn btn-outline" onclick="loadDashboard()">Refresh report &amp; score</button>
+      <button class="btn btn-outline" onclick="downloadReport()">Download Clean PDF Report</button>
+    </div>
+
+    <div class="card">
+      <h2>Upload History</h2>
+      <div id="historyList"><p style="font-size:12px;color:var(--text-muted);">No uploads recorded yet.</p></div>
+    </div>
+  </div>
+
+  <!-- Right Dashboard Content -->
+  <div>
+    <div class="card">
+      <div class="score-header">
+        <div>
+          <h2>Performance Score</h2>
+          <div class="score-value" id="scoreVal">--</div>
+        </div>
+        <div><span class="badge" id="ratingBadge">Pending</span></div>
+      </div>
+      <div style="margin-top: 20px;">
+        <div class="bar-label"><span>Response time</span><span id="rtBarTxt">100</span></div>
+        <div class="bar-container"><div class="bar-fill" id="rtBar" style="width: 100%"></div></div>
+
+        <div class="bar-label"><span>Reliability</span><span id="relBarTxt">100</span></div>
+        <div class="bar-container"><div class="bar-fill" id="relBar" style="width: 100%"></div></div>
+
+        <div class="bar-label"><span>Throughput</span><span id="tpBarTxt">100</span></div>
+        <div class="bar-container"><div class="bar-fill" id="tpBar" style="width: 100%"></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Extracted Metrics</h2>
+      <div class="metrics-grid">
+        <div class="metric-box"><div class="metric-val" id="mRequests">--</div><div class="metric-lbl">Total requests</div></div>
+        <div class="metric-box"><div class="metric-val" id="mError">--</div><div class="metric-lbl">Error rate</div></div>
+        <div class="metric-box"><div class="metric-val" id="mMinResp">--</div><div class="metric-lbl">Min response</div></div>
+        <div class="metric-box"><div class="metric-val" id="mAvgResp">--</div><div class="metric-lbl">Avg response</div></div>
+        <div class="metric-box"><div class="metric-val" id="mP95Resp">--</div><div class="metric-lbl">P95 response</div></div>
+        <div class="metric-box"><div class="metric-val" id="mMaxResp">--</div><div class="metric-lbl">Max response</div></div>
+        <div class="metric-box"><div class="metric-val" id="mRps">--</div><div class="metric-lbl">Req / sec (RPS)</div></div>
+        <div class="metric-box"><div class="metric-val" id="mDuration">--</div><div class="metric-lbl">Test duration</div></div>
+        <div class="metric-box"><div class="metric-val" id="mVus">--</div><div class="metric-lbl">Virtual users (VUs)</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let selectedFile = null;
+const fileInput = document.getElementById('fileInput');
+const fileName = document.getElementById('fileName');
+const uploadBtn = document.getElementById('uploadBtn');
+const statusMsg = document.getElementById('statusMsg');
+
+fileInput.onchange = (e) => {
+  selectedFile = e.target.files[0];
+  if(selectedFile) {
+    fileName.textContent = selectedFile.name;
+    uploadBtn.disabled = false;
+  }
+};
+
+async function uploadFile() {
+  if(!selectedFile) return;
+  statusMsg.textContent = "Scanning file metrics...";
+  statusMsg.style.color = "var(--text-muted)";
+
+  const fd = new FormData();
+  fd.append('file', selectedFile);
+
+  try {
+    const res = await fetch('/api/performance/upload', { method: 'POST', body: fd });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.message || data.error_log || "Upload failed");
+
+    statusMsg.textContent = data.message;
+    statusMsg.style.color = "var(--success)";
+    
+    // Fetch newly calculated score to save in history with correct rating and score
+    const scoreRes = await fetch('/api/performance/score');
+    const s = await scoreRes.json();
+    
+    addToHistory(selectedFile.name, s.rating, s.score);
+    loadDashboard();
+  } catch(err) {
+    statusMsg.textContent = err.message;
+    statusMsg.style.color = "#F87171";
+  }
+}
+
+async function loadDashboard() {
+  try {
+    const repRes = await fetch('/api/performance/report');
+    const r = await repRes.json();
+    document.getElementById('mRequests').textContent = r.totalRequests;
+    document.getElementById('mError').textContent = r.errorRate + '%';
+    document.getElementById('mMinResp').textContent = r.minResponseTime + ' ms';
+    document.getElementById('mAvgResp').textContent = r.averageResponseTime + ' ms';
+    document.getElementById('mP95Resp').textContent = r.p95ResponseTime + ' ms';
+    document.getElementById('mMaxResp').textContent = r.maxResponseTime + ' ms';
+    document.getElementById('mRps').textContent = r.requestsPerSecond;
+    document.getElementById('mDuration').textContent = r.duration;
+    document.getElementById('mVus').textContent = r.vus;
+
+    const scoreRes = await fetch('/api/performance/score');
+    const s = await scoreRes.json();
+    document.getElementById('scoreVal').textContent = s.score;
+    document.getElementById('ratingBadge').textContent = s.rating;
+
+    document.getElementById('rtBar').style.width = s.responseTimeScore + '%';
+    document.getElementById('rtBarTxt').textContent = s.responseTimeScore;
+    document.getElementById('relBar').style.width = s.reliabilityScore + '%';
+    document.getElementById('relBarTxt').textContent = s.reliabilityScore;
+    document.getElementById('tpBar').style.width = s.throughputScore + '%';
+    document.getElementById('tpBarTxt').textContent = s.throughputScore;
+  } catch(e) {}
+}
+
+function addToHistory(name, rating, score) {
+  let history = JSON.parse(localStorage.getItem('wic_history') || '[]');
+  // Remove duplicate entry if file uploaded again
+  history = history.filter(item => item.name !== name);
+  history.unshift({ name, rating, score });
+  if(history.length > 5) history.pop();
+  localStorage.setItem('wic_history', JSON.stringify(history));
+  renderHistory();
+}
+
+function renderHistory() {
+  let history = JSON.parse(localStorage.getItem('wic_history') || '[]');
+  const list = document.getElementById('historyList');
+  if(history.length === 0) {
+    list.innerHTML = '<p style="font-size:12px;color:var(--text-muted);">No uploads recorded yet.</p>';
+    return;
+  }
+  list.innerHTML = history.map(item => `
+    <div class="history-item">
+      <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:150px;" title="${item.name}">${item.name}</span>
+      <span class="history-badge">${item.rating} (${item.score})</span>
+    </div>
+  `).join('');
+}
+
+function downloadReport() {
+  const text = `CLOUD PERFORMANCE PLATFORM - SCAN SUMMARY\n==========================================\nScore: ${document.getElementById('scoreVal').textContent} (${document.getElementById('ratingBadge').textContent})\nTotal Requests: ${document.getElementById('mRequests').textContent}\nError Rate: ${document.getElementById('mError').textContent}\nP95 Response: ${document.getElementById('mP95Resp').textContent}\nRPS: ${document.getElementById('mRps').textContent}\n`;
+  const blob = new Blob([text], {type: 'text/plain'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'Performance_Report_Summary.txt';
+  a.click();
+}
+
+renderHistory();
+loadDashboard();
+</script>
+</body>
+</html>

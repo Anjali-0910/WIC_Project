@@ -1,0 +1,60 @@
+============================================================
+           DOCKER LAB & COMMANDS STUDY NOTES (FULL)
+============================================================
+
+1. FIXING DOCKER SOCKET PERMISSION DENIED ERROR
+------------------------------------------------------------
+* Problem: permission denied while trying to connect to the docker API at unix:///var/run/docker.sock
+* Cause: User account lacked membership in the 'docker' system group.
+* Fix Commands:
+  - Add user to docker group: sudo usermod -aG docker $USER
+  - Refresh session: su - $USER
+  - Verify groups: groups (ensure 'docker' is listed)
+
+
+2. WRITING AND BUILDING A CUSTOM DOCKERFILE
+------------------------------------------------------------
+* Navigation: cd ~/Desktop/firstfile (must be in project folder)
+* Key Dockerfile Syntax Rules:
+  - Base Image: FROM ubuntu:jammy
+  - Adding Files: 'ADD' requires two arguments (source & container destination), e.g., ADD text1.txt /tmp/
+  - Execution Command: CMD requires a space before JSON arrays, e.g., CMD ["echo", "hello"]
+* Build Command:
+  - docker build -t firstfile:2.0 .
+
+
+3. RUNNING AND INSPECTING CONTAINERS
+------------------------------------------------------------
+* Run Container (Default CMD):
+  - docker run firstfile:2.0
+* Interactive Shell Access:
+  - docker run -it firstfile:2.0 /bin/sh
+* Verifying Files Inside Container:
+  - cd /tmp
+  - cat text1.txt
+
+
+4. NETWORKING & EXPOSING THE DOCKER DAEMON API
+------------------------------------------------------------
+* Finding Local IP Address:
+  - ip a (look under wlo1/inet for Wi-Fi IP, e.g., 10.252.81.88)
+* Configuring Docker Daemon:
+  1. Open systemd service: sudo nano /lib/systemd/system/docker.service
+  2. Bind to TCP socket: ExecStart=/usr/bin/dockerd -H fd:// -H tcp://0.0.0.0:2375
+  3. Reload and Restart: sudo systemctl daemon-reload && sudo systemctl restart docker
+* Testing the API:
+  - Local browser: http://localhost:2375/images/json
+  - Network browser: http://<YOUR_IP>:2375/images/json[cite: 1]
+
+
+5. RUNNING CONTAINERS AS DAEMONS (DETACHED MODE)
+------------------------------------------------------------
+* Concept: Running a container with a foreground process (like Redis) blocks the terminal prompt until interrupted with Ctrl + C.
+* Running in Foreground:
+  - docker run secondfile (logs stream live, prompt is withheld)
+  - Stop/Exit foreground: Press Ctrl + C
+* Running in Detached / Daemon Mode (-d flag):
+  - docker run -d secondfile (runs quietly in the background, returns prompt immediately)
+* Checking Running Container Processes:
+  - docker ps
+============================================================
